@@ -46,7 +46,7 @@ Attempting to pair with 15:B5:EF:46:08:B6
 ### Bind the device as an RFCOMM serial port
 
 ```bash
-sudo rfcomm bind /dev/rfcomm0 15:B5:EF:46:08:B6 1
+sudo rfcomm bind /dev/rfcomm0 <DEVICE_MAC> 1
 ```
 
 You should now see `/dev/rfcomm0`.
@@ -57,13 +57,13 @@ You should now see `/dev/rfcomm0`.
 ### Print a text label
 
 ```bash
-python p21.py --text "100Ω"
+./p21.py --text "100Ω"
 ```
 
 ### Print an image
 
 ```bash
-python p21.py --image test-template.png
+./p21.py --image test-template.png
 ```
 
 ### Preview only (no printing)
@@ -71,8 +71,8 @@ python p21.py --image test-template.png
 Display the generated label instead of printing it so you can sanity-check layout and waste less tape:
 
 ```bash
-python p21.py --text "100Ω" --preview-only
-python p21.py --image test-template.png --preview-only
+./p21.py --text "100Ω" --preview-only
+./p21.py --image test-template.png --preview-only
 ```
 
 ## Acknowledgements
