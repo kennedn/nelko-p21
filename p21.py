@@ -2,10 +2,10 @@
 import argparse
 from pathlib import Path
 from typing import Optional
+from matplotlib import font_manager
 
-from matplotlib import image
 import serial
-from PIL import Image, ImageOps, ImageEnhance, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageDraw, ImageFont
 
 # Printer / label geometry constants
 LABEL_WIDTH_PX = 284
@@ -15,16 +15,15 @@ ROTATED_HEIGHT_PX = LABEL_WIDTH_PX      # 284
 BYTES_PER_ROW = ROTATED_WIDTH_PX // 8   # 96 px / 8 = 12 bytes
 EXPECTED_BYTES = ROTATED_HEIGHT_PX * BYTES_PER_ROW  # 284 * 12 = 3408
 
-DEFAULT_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+DEFAULT_FONT = "DejaVu Sans:bold"
 DEFAULT_FONT_SIZE = 30
 DEFAULT_DENSITY = 7
 DEFAULT_COPIES = 1
 DEFAULT_DEVICE = "/dev/rfcomm0"
 
-def load_image(image_path, preview=False, threshold=180):
+def load_image(image_path, preview=False, threshold=180) -> bytes:
     """
-    Load an image, normalize it to a clean 1-bit 96×284 bitmap for the printer,
-    with minimal dithering artefacts.
+    Load an image, normalize it to a clean 1-bit 96×284 bitmap for the printer.
     """
     img = Image.open(image_path)
 
@@ -49,39 +48,43 @@ def load_image(image_path, preview=False, threshold=180):
 
     return bitdata
 
-
-def render_text_label(
-    text: str,
-    width: int = LABEL_WIDTH_PX,
-    height: int = LABEL_HEIGHT_PX,
-    font_path: str = DEFAULT_FONT_PATH,
-    font_size: int = DEFAULT_FONT_SIZE,
-    preview: bool = False,
-) -> bytes:
+def render_text_label(text: str, width: int = LABEL_WIDTH_PX, height: int = LABEL_HEIGHT_PX,
+    font: str = DEFAULT_FONT, font_size: int = DEFAULT_FONT_SIZE, preview: bool = False) -> bytes:
     """
     Render centered bold text into a 284x96 image,
     rotate to 96x284 for the printer, and return packed bitmap bytes.
-
-    In preview mode, shows only the pre-rotation (readable) 284x96 image.
     """
-    # Work in label orientation (human-readable)
     img = Image.new("1", (width, height), 1)  # white background
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(font_path, font_size)
-
-    bbox = draw.textbbox((0, 0), text, font=font)
+    font = ImageFont.truetype(font_manager.findfont(font), font_size)
+    # Measure multiline text
+    bbox = draw.multiline_textbbox(
+        (0, 0),
+        text,
+        font=font,
+        spacing=4,
+        align="center"
+    )
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
 
+    # Center it
     x = (width - text_w) // 2 - bbox[0]
     y = (height - text_h) // 2 - bbox[1]
 
-    draw.text((x, y), text, font=font, fill=0)  # black text
+    # Draw multiline text
+    draw.multiline_text(
+        (x, y),
+        text,
+        font=font,
+        fill=0,
+        spacing=4,
+        align="center"
+    )
 
     if preview:
         img.show(title="Text label (readable orientation)")
 
-    # Rotate 90° clockwise to get 96x284 for the printer
     rotated = img.rotate(-90, expand=True)
 
     if rotated.size != (ROTATED_WIDTH_PX, ROTATED_HEIGHT_PX):
@@ -153,10 +156,10 @@ def parse_args() -> argparse.Namespace:
         help=f"Font size for text mode (default: {DEFAULT_FONT_SIZE}).",
     )
     parser.add_argument(
-        "--font-path",
+        "--font-name",
         type=str,
-        default=DEFAULT_FONT_PATH,
-        help=f"Path to a TTF font (default: {DEFAULT_FONT_PATH}).",
+        default=DEFAULT_FONT,
+        help=f"Path to a TTF font (default: {DEFAULT_FONT}).",
     )
     parser.add_argument(
         "--density",
@@ -198,7 +201,7 @@ def main() -> None:
         else:
             render_text_label(
                 text=args.text,
-                font_path=args.font_path,
+                font=args.font_name,
                 font_size=args.font_size,
                 preview=True,
             )
@@ -210,7 +213,7 @@ def main() -> None:
     else:
         bitdata = render_text_label(
             text=args.text,
-            font_path=args.font_path,
+            font=args.font_name,
             font_size=args.font_size,
             preview=False,
         )

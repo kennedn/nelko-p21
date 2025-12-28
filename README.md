@@ -57,7 +57,8 @@ You should now see `/dev/rfcomm0`.
 ### Print a text label
 
 ```bash
-./p21.py --text "100Ω"
+./p21.py --text "100Ω" # Single line
+./p21.py --text $'100\n(Ω)' # Multi line
 ```
 
 ### Print an image

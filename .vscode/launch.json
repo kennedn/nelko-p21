@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "internalConsole",
-            "args": ["--device", "/dev/rfcomm0", "--image", "test-template.png"]//, "--preview-only"]
+            "args": ["--device", "/dev/rfcomm0", "--image", "test-template.png", "--preview-only"]
         }
     ]
 }
