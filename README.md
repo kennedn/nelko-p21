@@ -1,60 +1,80 @@
-# nelko-p21-capture
-This is a capture of the bluetooth traffic of a Nelko P21 label printer
+# Nelko P21 Label Printer
 
-It contains a connection and a print of the default template on a 14x40mm label. The entire communication of the printer runs via SPP/RFCOMM aka a serial connection over Bluetooth. The printer also has an internal NFC reader to identify the the label rolls put inside. It automatically determines the format of the labels this way. It also seems to be a type of soft DRM, where the app complains, if you use third-party label rolls.
+A Python command-line tool for printing text and images to a **Nelko P21 Bluetooth thermal label printer** over bluetooth.
 
-The printer itself uses some proprietary commands like the following. Every command must be followed by a CRLF as is every response. 
-- `BATTERY?`  
-  Responds with: `BATTERY ` followed by two bytes. The first byte is most likely the charge level in percent.
-- `CONFIG?` 
-  Responds with: `CONFIG ` followed by something like `00cb0000030402040201`. 
-  The first byte may indicate some protocol type, in this case TSPL2 and the second to the DPI resolution of 203 (CB).
-  The next three bytes `00 00 03` corresponds to the first firmware version in the app (0.3.0).
-  The three bytes after that `04 02 04` corresponds to the second firmware version in the app (4.2.4).
-  Then comes one byte containing the timeout setting: `00` to `03` for never, 15 min, 30 min, 60 min.
-  The last byte is the status of the beep setting.
-- `BEEP` followed by a space and 0x00 or 0x01. 
-- `[ESC]!o`  
-  According to the TSPL2 documentation this cancels the pause status of the printer. The command is sent repeatedly from the app to the printer and the printer answers with a short status.
-- `[ESC]!?`
-  Seems to return the ready status for the printer.
 
-The sent printing commands correspond to parts of TSPL2:
+## Prerequisites
 
-```plaintext
-SIZE 14.0 mm,40.0 mm
-GAP 5.0 mm,0 mm
-DIRECTION 0,0
-DENSITY 15
-CLS
-BITMAP 0,0,12,284,1,?????AT???GuC??
-... [truncated]
+### Ensure the current user is in the `dialout` group
+
+This allows access to `/dev/rfcomm0` without root:
+
+```bash
+sudo usermod -aG dialout "$USER"
 ```
 
-It only supports a subset of TSPL2 commands like:
+Log out and back in for the group change to take effect.
 
-- SIZE: Sets the size of the labels.
-- GAP: Sets the gap between the labels.
-- DIRECTION: Controls the print direction. In case of the P21 it doesn't seem to change anything.
-- DENSITY: Controls the print density/darkness of the print.
-- CLS: Clears the print canvas.
-- BITMAP: Prints an image and takes the parameters Xpos, YPos, height in bytes, width in dots.
-- SELFTEST: This triggers the test print, the printer generates when hitting the power button once.
-- PRINT x: Prints x copies of the label
-- BAR: prints only a completely black label
-- BARCODE: might do something, but doesn't correspond to the TSPL2 syntax. I saw it print a slightly messy black bar. I skipped all other barcode commands, after checking if QRCODE works. It doesn't.
-- INITIALPRINTER: Triggers a factory reset.
 
-The image format is 96x284 pixels in 1 bit color depth as raw data. Every bit is a pixel there are no checksums or error correction data.
+### Pair the powered-on P21 device
 
-The printer also exposes a serial USB connection to the PC but only returns `ERROR0` on any command.
-
-Internally it uses a JieLi AC6951C (or similiar) bluetooth chip (see https://github.com/kagaimiq/jielie/pull/6).
-
-Nelkos app also uses JieLis ota update feature. It checks for updates at this url: http://app.nelko.net/api/firmware/verify with a POST request:
-
-```json
-{"hardwareName":"0.0.3","dev":"P21","firmwareName":"4.2.4"}
+```bash
+bluetoothctl
+# In the bluetoothctl shell:
+scan on
+pair <DEVICE_MAC>
 ```
 
-There seems to be no way to get the URL for the current firmware. The app is very chatty and even sends the entire device metadata to the server. And seemingly via plain HTTP.
+<details>
+<summary>Output:</summary>
+
+```bash
+❯ bluetoothctl
+Waiting to connect to bluetoothd...
+[bluetooth]# scan on
+[NEW] Device 15:B5:EF:46:08:B6 P21
+[P21]# pair 15:B5:EF:46:08:B6
+Attempting to pair with 15:B5:EF:46:08:B6
+[CHG] Device 15:B5:EF:46:08:B6 Connected: yes
+[P21]# [CHG] Device 15:B5:EF:46:08:B6 Bonded: yes
+[P21]# [CHG] Device 15:B5:EF:46:08:B6 Paired: yes
+[P21]# Pairing successful
+```
+
+</details>
+
+### Bind the device as an RFCOMM serial port
+
+```bash
+sudo rfcomm bind /dev/rfcomm0 15:B5:EF:46:08:B6 1
+```
+
+You should now see `/dev/rfcomm0`.
+
+
+## Example Usage
+
+### Print a text label
+
+```bash
+python p21.py --text "100Ω"
+```
+
+### Print an image
+
+```bash
+python p21.py --image test-template.png
+```
+
+### Preview only (no printing)
+
+Display the generated label instead of printing it so you can sanity-check layout and waste less tape:
+
+```bash
+python p21.py --text "100Ω" --preview-only
+python p21.py --image test-template.png --preview-only
+```
+
+## Acknowledgements
+
+This script was made possible thanks to the excellent protocol reverse-engineering work achieved in [merlinschumacher/nelko-p21-capture](https://github.com/merlinschumacher/nelko-p21-capture/).
